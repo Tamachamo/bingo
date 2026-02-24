@@ -3,113 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>リアルタイムBINGO - 同期システム</title>
+    <title>BINGO LIVE - Sync & Save</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         .badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; margin-bottom: 10px; font-weight: bold; }
         .host-badge { background: #ffeaa7; color: #d63031; }
         .viewer-badge { background: #dfe6e9; color: #636e72; }
         #current-number { font-size: 100px; font-weight: bold; color: #e74c3c; margin: 20px 0; height: 140px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
-        button { font-size: 20px; padding: 12px 30px; cursor: pointer; background: #0984e3; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3); width: 100%; margin-bottom: 10px; }
+        button { font-size: 18px; padding: 12px 25px; cursor: pointer; background: #0984e3; color: white; border: none; border-radius: 50px; box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3); width: 100%; margin-bottom: 10px; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
         button:disabled { background: #b2bec3; cursor: not-allowed; }
         #history { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 15px; }
-        .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; font-size: 12px; font-weight: bold; }
-        .last-digit { background: #ff7675; color: white; transform: scale(1.1); }
-        .setup-area { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-size: 14px; }
-        #room-id-display { font-weight: bold; color: #0984e3; font-size: 18px; }
+        .history-item { width: 32px; height: 32px; line-height: 32px; background: #dfe6e9; border-radius: 50%; font-size: 13px; font-weight: bold; }
+        .last-digit { background: #ff7675; color: white; transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .setup-area { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .copy-info { font-size: 12px; color: #0984e3; cursor: pointer; text-decoration: underline; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="role-display"></div>
+    <div id="status-badge"><span class="badge viewer-badge">準備中...</span></div>
     <h1>🎉 BINGO LIVE</h1>
 
-    <div id="setup" class="setup-area">
-        <p>【運営者】IDを参加者に伝えてください</p>
-        <div id="room-id-display">接続中...</div>
-        <hr>
-        <p>【参加者】IDを入力して接続</p>
-        <input type="text" id="join-id" placeholder="IDを入力" style="padding: 8px; width: 60%; border-radius: 5px; border: 1px solid #ccc;">
-        <button onclick="joinRoom()" style="width: 30%; font-size: 14px; padding: 8px; display: inline-block;">参加</button>
+    <div id="setup-host" class="setup-area">
+        <p style="margin:0 0 10px 0; font-size: 14px;">運営者として開始しました</p>
+        <button id="copy-url-btn" onclick="copyInviteURL()" style="background: #00b894; font-size: 14px;">招待URLをコピー</button>
+        <div id="copy-msg" class="copy-info" style="display:none;">コピーしました！LINE等で送ってください</div>
     </div>
 
     <div id="current-number">?</div>
     
     <div id="host-controls" style="display: none;">
         <button id="draw-btn" onclick="drawNumber()">数字を引く！</button>
-        <button onclick="resetBingo()" style="background: #636e72; font-size: 14px;">リセット</button>
+        <button onclick="resetBingo()" style="background: #636e72; font-size: 14px; margin-top: 20px;">リセット</button>
     </div>
 
-    <div style="font-weight: bold; color: #636e72; margin-top: 20px;">出た数字の履歴</div>
+    <div style="font-weight: bold; color: #636e72; margin-top: 20px; font-size: 14px;">出た数字の履歴</div>
     <div id="history"></div>
 </div>
 
 <script>
+    // URLからホストIDを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinId = urlParams.get('id');
+
     let peer = new Peer();
-    let conn = null; // ビューアー用
-    let connections = []; // ホスト用（全参加者リスト）
-    let numbers = Array.from({length: 75}, (_, i) => i + 1);
-    let history = [];
-    let isHost = false;
+    let conn = null;
+    let connections = [];
+    let isHost = !joinId; // URLにIDがなければホスト
 
-    // IDが生成されたら表示
+    // データの読み込み
+    let numbers = JSON.parse(localStorage.getItem('bingo_numbers')) || Array.from({length: 75}, (_, i) => i + 1);
+    let history = JSON.parse(localStorage.getItem('bingo_history')) || [];
+
     peer.on('open', (id) => {
-        document.getElementById('room-id-display').innerText = id;
+        if (isHost) {
+            setupAsHost(id);
+        } else {
+            setupAsViewer(id, joinId);
+        }
     });
 
-    // 【ホスト側】参加者が接続してきた時の処理
-    peer.on('connection', (c) => {
-        isHost = true;
-        connections.push(c);
-        updateRoleDisplay('運営者');
+    // --- ホスト側の処理 ---
+    function setupAsHost(id) {
+        document.getElementById('status-badge').innerHTML = '<span class="badge host-badge">運営者モード</span>';
         document.getElementById('host-controls').style.display = 'block';
-        document.getElementById('setup').style.backgroundColor = '#fff9db';
-        
-        // 接続した瞬間に現在の状態を送る
-        c.on('open', () => {
-            c.send({ type: 'sync', history: history, current: history[history.length-1] || '?' });
-        });
-    });
+        updateUI(history[history.length-1] || '?', history);
 
-    // 【ビューアー側】ホストに参加する
-    function joinRoom() {
-        const targetId = document.getElementById('join-id').value;
-        conn = peer.connect(targetId);
+        peer.on('connection', (c) => {
+            connections.push(c);
+            c.on('open', () => {
+                c.send({ type: 'sync', history: history, current: history[history.length-1] || '?' });
+            });
+        });
+    }
+
+    function copyInviteURL() {
+        const inviteURL = window.location.origin + window.location.pathname + '?id=' + peer.id;
+        navigator.clipboard.writeText(inviteURL);
+        document.getElementById('copy-msg').style.display = 'block';
+        setTimeout(() => document.getElementById('copy-msg').style.display = 'none', 3000);
+    }
+
+    function drawNumber() {
+        if (numbers.length === 0) return alert("すべて出ました！");
+        const btn = document.getElementById('draw-btn');
+        btn.disabled = true;
+
+        // 全員にシャッフル開始を通知
+        connections.forEach(c => c.send({ type: 'shuffle' }));
+        startShuffleEffect(false);
+
+        setTimeout(() => {
+            const randomIndex = Math.floor(Math.random() * numbers.length);
+            const drawn = numbers.splice(randomIndex, 1)[0];
+            history.push(drawn);
+            
+            // ローカル保存
+            localStorage.setItem('bingo_numbers', JSON.stringify(numbers));
+            localStorage.setItem('bingo_history', JSON.stringify(history));
+
+            stopShuffleEffect(drawn, history);
+            connections.forEach(c => c.send({ type: 'result', number: drawn, history: history }));
+            btn.disabled = false;
+        }, 3000);
+    }
+
+    // --- 参加者側の処理 ---
+    function setupAsViewer(myId, hostId) {
+        document.getElementById('setup-host').style.display = 'none';
+        document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">参加者：接続中...</span>';
         
+        conn = peer.connect(hostId);
         conn.on('open', () => {
-            isHost = false;
-            updateRoleDisplay('参加者');
-            document.getElementById('setup').style.display = 'none';
-            document.getElementById('host-controls').style.display = 'none';
+            document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">参加者：同期中 ✅</span>';
         });
 
         conn.on('data', (data) => {
-            if (data.type === 'shuffle') {
-                startShuffleEffect(false);
-            } else if (data.type === 'result') {
-                stopShuffleEffect(data.number, data.history);
-            } else if (data.type === 'sync') {
-                updateUI(data.current, data.history);
-            }
+            if (data.type === 'shuffle') startShuffleEffect(false);
+            if (data.type === 'result') stopShuffleEffect(data.number, data.history);
+            if (data.type === 'sync') updateUI(data.current, data.history);
+        });
+
+        conn.on('close', () => {
+            alert("運営者が切断しました。再読み込みしてください。");
         });
     }
 
-    function updateRoleDisplay(role) {
-        const badge = role === '運営者' ? '<span class="badge host-badge">運営者モード</span>' : '<span class="badge viewer-badge">参加者モード（同期中）</span>';
-        document.getElementById('role-display').innerHTML = badge;
-    }
-
+    // --- 共通UI処理 ---
     let shuffleInterval;
-    function startShuffleEffect(sendSignal = true) {
+    function startShuffleEffect(sendSignal) {
         const display = document.getElementById('current-number');
-        if (sendSignal && isHost) {
-            connections.forEach(c => c.send({ type: 'shuffle' }));
-        }
-        
-        let count = 0;
         shuffleInterval = setInterval(() => {
             display.innerText = Math.floor(Math.random() * 75) + 1;
         }, 80);
@@ -133,33 +160,10 @@
         });
     }
 
-    // 【ホスト専用】数字を引く
-    function drawNumber() {
-        if (numbers.length === 0) return alert("終了です");
-        
-        const btn = document.getElementById('draw-btn');
-        btn.disabled = true;
-        
-        startShuffleEffect(true);
-
-        setTimeout(() => {
-            const randomIndex = Math.floor(Math.random() * numbers.length);
-            const drawn = numbers.splice(randomIndex, 1)[0];
-            history.push(drawn);
-            
-            stopShuffleEffect(drawn, history);
-            connections.forEach(c => c.send({ type: 'result', number: drawn, history: history }));
-            btn.disabled = false;
-        }, 3000); // 3秒間シャッフル
-    }
-
     function resetBingo() {
-        if (!confirm("リセットしますか？")) return;
-        numbers = Array.from({length: 75}, (_, i) => i + 1);
-        history = [];
-        const data = { type: 'sync', history: [], current: '?' };
-        updateUI('?', []);
-        connections.forEach(c => c.send(data));
+        if (!confirm("データをリセットしますか？")) return;
+        localStorage.clear();
+        location.href = window.location.origin + window.location.pathname; // IDなしURLに戻す
     }
 </script>
 </body>
