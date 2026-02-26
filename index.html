@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE Pro - Standard Edition</title>
+    <title>BINGO LIVE Pro - Instant Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -34,7 +34,7 @@
     <div id="room-setup">
         <div class="setup-group">
             <label>合言葉</label>
-            <input type="text" id="room-input" placeholder="例: event2026">
+            <input type="text" id="room-input" placeholder="例: urupuya2026">
         </div>
         <div class="setup-group">
             <label>モード</label>
@@ -58,11 +58,11 @@
         <div id="host-controls" style="display:none;">
             <button id="draw-btn" onclick="drawNumber()">数字を引く！</button>
             <button onclick="copyInviteURL()" style="background: var(--success);">招待URLをコピー</button>
-            <button onclick="resetBingo()" class="btn-secondary" style="margin-top: 20px;">全データをリセットして終了</button>
+            <button onclick="resetBingo()" class="btn-secondary" style="margin-top: 20px;">リセット</button>
         </div>
 
         <div id="viewer-controls" style="display:none;">
-            <button onclick="leaveRoom()" class="btn-secondary">この部屋を退室する</button>
+            <button onclick="leaveRoom()" class="btn-secondary">退出する</button>
         </div>
 
         <div id="card-area" style="display:none;"><div id="bingo-card" class="bingo-card"></div></div>
@@ -72,7 +72,6 @@
 </div>
 
 <script>
-    // --- Supabaseのキーを入れてください ---
     const SUPABASE_URL = 'https://nabtioekqpiktpjauqew.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hYnRpb2VrcXBpa3RwamF1cWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTQ5MzAsImV4cCI6MjA4NzY5MDkzMH0.0eGaw82h3jiVs9N6b4JG0fd-hbPEFUT2AQTBT6s1vww';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -126,6 +125,7 @@
         document.getElementById('main-game').style.display = 'block';
 
         channel = supabaseClient.channel(`room_${roomName}`, { config: { broadcast: { self: true } } });
+        
         channel.on('broadcast', { event: 'update' }, p => handleMsg(p.payload)).subscribe(s => {
             if (s === 'SUBSCRIBED') {
                 document.getElementById('badge').innerText = isHost ? "運営者" : "参加者：同期中 ✅";
@@ -140,20 +140,35 @@
                 } else {
                     document.getElementById('host-controls').style.display = 'none';
                     document.getElementById('viewer-controls').style.display = 'block';
+                    // 入室した瞬間に、運営者へ現在の状態をリクエストする
+                    channel.send({ type: 'broadcast', event: 'update', payload: { type: 'request_sync' } });
                 }
             }
         });
     }
 
     function handleMsg(p) {
+        // 運営者が参加者からのリクエストを受け取った時
+        if (isHost && p.type === 'request_sync') {
+            sendSync();
+            return;
+        }
+
         if (p.type === 'shuffle') startShuffle();
+        
         if (p.type === 'sync' || p.type === 'result') {
             clearInterval(shuffleTimer);
             mode = p.mode; history = p.history; maxNum = p.maxNum;
             document.getElementById('room-info').innerText = `Room: ${roomName} (${maxNum})`;
+            
             if (mode == "2") {
                 const savedCard = localStorage.getItem(`card_${roomName}`);
-                if (savedCard) { myCard = JSON.parse(savedCard); } else { generateCard(); }
+                if (savedCard) {
+                    myCard = JSON.parse(savedCard);
+                } else {
+                    generateCard();
+                }
+                // カードエリアを即座に表示
                 document.getElementById('card-area').style.display = 'block';
             }
             updateUI(p.current);
@@ -181,9 +196,11 @@
 
     function updateUI(cur) {
         document.getElementById('current-number').innerText = cur;
-        if (mode == "2") {
-            myCard.forEach(c => { if(c.n == cur) c.h = true; });
-            localStorage.setItem(`card_${roomName}`, JSON.stringify(myCard));
+        if (mode == "2" && myCard.length > 0) {
+            // 現在の数字が履歴に含まれている場合、カードを更新
+            history.forEach(num => {
+                myCard.forEach(c => { if(c.n == num) c.h = true; });
+            });
             renderCard();
         }
         document.getElementById('history').innerHTML = history.slice().reverse().map((n, i) => 
@@ -232,26 +249,18 @@
         channel.send({ type: 'broadcast', event: 'update', payload: { type, history, mode, maxNum, current: cur || history[history.length - 1] || '?' } });
     }
 
-    function copyInviteURL() {
-        const url = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
-        navigator.clipboard.writeText(url).then(() => alert("URLをコピーしました！"));
-    }
-
-    // --- 追加：参加者用退室機能 ---
     function leaveRoom() {
-        if(confirm('この部屋を退室してロビーに戻りますか？')) {
+        if(confirm('退出しますか？')) {
             localStorage.removeItem('active_room');
             localStorage.removeItem('active_role');
-            // カードデータは残しておいても良いが、気になるなら以下も実行
-            // localStorage.removeItem(`card_${roomName}`);
             location.href = window.location.origin + window.location.pathname;
         }
     }
 
     function resetBingo() {
-        if(confirm('全ての運営データをリセットして終了しますか？（参加者の画面は自動では戻りません）')) {
+        if(confirm('全リセットしますか？')) {
             localStorage.clear();
-            location.href = window.location.origin + window.location.pathname;
+            location.reload();
         }
     }
 </script>
