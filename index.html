@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE - Multi Room</title>
+    <title>BINGO LIVE - Custom Range</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
@@ -13,7 +13,9 @@
         .viewer-badge { background: #dfe6e9; color: #636e72; }
         #current-number { font-size: 100px; font-weight: bold; color: #e74c3c; margin: 20px 0; height: 140px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
         button { font-size: 16px; padding: 12px; width: 100%; border-radius: 50px; border: none; background: #0984e3; color: white; cursor: pointer; margin-bottom: 10px; }
-        input { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid #ccc; box-sizing: border-box; text-align: center; }
+        .input-group { text-align: left; margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 12px; color: #666; margin-bottom: 5px; margin-left: 10px; }
+        input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ccc; box-sizing: border-box; text-align: center; font-size: 16px; }
         #history { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
         .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; font-size: 12px; }
         .last-digit { background: #ff7675 !important; color: white; }
@@ -26,8 +28,14 @@
     <h1>🎉 BINGO LIVE</h1>
 
     <div id="room-setup">
-        <p>ルーム名（合言葉）を決めてください</p>
-        <input type="text" id="room-input" placeholder="例: wedding2026">
+        <div class="input-group">
+            <label>ルーム名（合言葉）</label>
+            <input type="text" id="room-input" placeholder="例: matsusaka2026">
+        </div>
+        <div class="input-group">
+            <label>最大数字（デフォルト: 75）</label>
+            <input type="number" id="max-num-input" value="75" min="1" max="999">
+        </div>
         <button onclick="startBingo(true)">運営者として開始</button>
         <p style="font-size: 12px; color: #666;">または招待URLから参加してください</p>
     </div>
@@ -51,15 +59,15 @@
     let peer, conn, connections = [];
     let roomName = "";
     let isHost = false;
+    let maxNum = 75;
     let numbers = [];
     let history = [];
 
-    // URLにroomパラメータがあるかチェック
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) {
         document.getElementById('room-input').value = roomParam;
-        startBingo(false); // 参加者として自動開始
+        startBingo(false);
     }
 
     function startBingo(hostMode) {
@@ -69,9 +77,7 @@
         isHost = hostMode;
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('main-game').style.display = 'block';
-        document.getElementById('room-info').innerText = `Room: ${roomName}`;
 
-        // ホストなら ID = roomName、参加者なら ID = ランダム
         const peerId = isHost ? roomName : null;
         peer = new Peer(peerId);
 
@@ -85,10 +91,9 @@
 
         peer.on('error', (err) => {
             if (err.type === 'unavailable-id') {
-                alert("そのルーム名は既に使用されています。別の名前を試すか、参加者として入ってください。");
+                alert("このルーム名は使用中です。別の名前を試してください。");
                 location.reload();
             }
-            console.error(err);
         });
     }
 
@@ -96,15 +101,21 @@
         document.getElementById('status-badge').innerHTML = '<span class="badge host-badge">運営者</span>';
         document.getElementById('host-controls').style.display = 'block';
         
-        // 履歴の読み込み（ルーム名ごとに保存）
-        numbers = JSON.parse(localStorage.getItem(`bingo_nums_${roomName}`)) || Array.from({length: 75}, (_, i) => i + 1);
+        // 運営者側で設定された最大値を取得
+        maxNum = parseInt(document.getElementById('max-num-input').value) || 75;
+        localStorage.setItem(`bingo_max_${roomName}`, maxNum);
+
+        document.getElementById('room-info').innerText = `Room: ${roomName} (1-${maxNum})`;
+
+        // データの読み込み
+        numbers = JSON.parse(localStorage.getItem(`bingo_nums_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
         history = JSON.parse(localStorage.getItem(`bingo_hist_${roomName}`)) || [];
         updateUI(history[history.length-1] || '?', history);
 
         peer.on('connection', (c) => {
             connections.push(c);
             c.on('open', () => {
-                c.send({ type: 'sync', history: history, current: history[history.length-1] || '?' });
+                c.send({ type: 'sync', history: history, current: history[history.length-1] || '?', maxNum: maxNum });
             });
         });
     }
@@ -118,6 +129,10 @@
         conn.on('data', (data) => {
             if (data.type === 'shuffle') startShuffle();
             if (data.type === 'result' || data.type === 'sync') {
+                if (data.maxNum) {
+                    maxNum = data.maxNum;
+                    document.getElementById('room-info').innerText = `Room: ${roomName} (1-${maxNum})`;
+                }
                 clearInterval(shuffleInterval);
                 updateUI(data.current || data.number, data.history);
             }
@@ -129,12 +144,12 @@
         const display = document.getElementById('current-number');
         clearInterval(shuffleInterval);
         shuffleInterval = setInterval(() => {
-            display.innerText = Math.floor(Math.random() * 75) + 1;
+            display.innerText = Math.floor(Math.random() * maxNum) + 1;
         }, 80);
     }
 
     function drawNumber() {
-        if (numbers.length === 0) return;
+        if (numbers.length === 0) return alert("すべて出揃いました！");
         const btn = document.getElementById('draw-btn');
         btn.disabled = true;
         connections.forEach(c => c.send({ type: 'shuffle' }));
@@ -168,9 +183,10 @@
     }
 
     function resetBingo() {
-        if(confirm('このルームのデータをリセットしますか？')){
+        if(confirm('リセットしますか？')){
             localStorage.removeItem(`bingo_nums_${roomName}`);
             localStorage.removeItem(`bingo_hist_${roomName}`);
+            localStorage.removeItem(`bingo_max_${roomName}`);
             location.href = window.location.origin + window.location.pathname;
         }
     }
