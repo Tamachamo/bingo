@@ -3,36 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE Pro - Ultimate</title>
+    <title>BINGO LIVE Pro - Standard Edition</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root { --primary: #0984e3; --accent: #e74c3c; --success: #00b894; }
-        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 15px; color: #333; overflow-x: hidden; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); position: relative; }
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         .badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
         .host-badge { background: #ffeaa7; color: #d63031; }
         .viewer-badge { background: #dfe6e9; color: #636e72; }
-        
-        #current-number { font-size: 100px; font-weight: bold; color: var(--accent); margin: 15px 0; height: 130px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; transition: transform 0.1s; }
-        
+        #current-number { font-size: 100px; font-weight: bold; color: var(--accent); margin: 15px 0; height: 130px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
         button { font-size: 16px; padding: 12px; width: 100%; border-radius: 50px; border: none; background: var(--primary); color: white; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
-        button:disabled { background: #b2bec3; }
-        
+        button:disabled { background: #b2bec3; cursor: not-allowed; }
         .setup-group { text-align: left; margin-bottom: 15px; }
         input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
-
-        .bingo-card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 20px; background: #ddd; padding: 5px; border-radius: 10px; }
-        .cell { aspect-ratio: 1/1; background: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; border-radius: 5px; position: relative; transition: 0.3s; }
-        .cell.hit { background: var(--accent); color: white; transform: scale(0.95); }
+        .bingo-card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 15px; background: #ccc; padding: 5px; border-radius: 10px; }
+        .cell { aspect-ratio: 1/1; background: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; border-radius: 5px; transition: background 0.3s; }
+        .cell.hit { background: var(--accent); color: white; }
         .cell.free { background: #636e72; color: white; font-size: 10px; }
-
         #history { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 15px; }
         .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; font-size: 12px; font-weight: bold; }
         .last-digit { background: var(--accent) !important; color: white; }
-
-        /* ビンゴ祝賀演出 */
-        #bingo-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; color: gold; font-size: 60px; font-weight: bold; text-shadow: 0 0 20px red; pointer-events: none; }
+        #bingo-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: gold; font-size: 60px; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -41,39 +34,39 @@
 
 <div class="container">
     <div id="status-badge"><span class="badge">ロビー</span></div>
-    <h1 style="margin: 0 0 10px 0;">🎉 BINGO LIVE Pro</h1>
+    <h1>🎉 BINGO LIVE Pro</h1>
 
     <div id="room-setup">
         <div class="setup-group">
-            <input type="text" id="room-input" placeholder="ルーム名（合言葉）">
+            <input type="text" id="room-input" placeholder="合言葉（ルーム名）">
         </div>
         <div class="setup-group">
-            <select id="mode-input">
-                <option value="1">通常モード</option>
-                <option value="2">カード配布モード</option>
+            <select id="mode-input" onchange="toggleMaxInput()">
+                <option value="1">通常モード（抽選機のみ）</option>
+                <option value="2">カード配布モード（75専用）</option>
             </select>
         </div>
-        <div class="setup-group">
+        <div class="setup-group" id="max-num-group">
             <input type="number" id="max-num-input" value="75" placeholder="最大数字">
         </div>
-        <button onclick="initBingo(true)">運営者として開始</button>
+        <button onclick="startBingo(true)">運営者として開始</button>
     </div>
 
     <div id="main-game" style="display:none;">
-        <div id="room-info" style="font-size: 14px; font-weight: bold; color: var(--primary); margin-bottom: 5px;"></div>
+        <div id="room-info" style="font-size: 14px; font-weight: bold; color: var(--primary);"></div>
         <div id="current-number">?</div>
         
         <div id="host-controls" style="display: none;">
             <button id="draw-btn" onclick="drawNumber()">数字を引く！</button>
-            <button onclick="copyInviteURL()" style="background: var(--success);">招待URLをコピー</button>
-            <button onclick="resetBingo()" style="background: #636e72;">終了・リセット</button>
+            <button onclick="copyInviteURL()" style="background: var(--success);">招待URLコピー</button>
+            <button onclick="resetBingo()" style="background: #636e72;">リセット</button>
         </div>
 
         <div id="card-area" style="display:none;">
             <div id="bingo-card" class="bingo-card"></div>
         </div>
         
-        <div style="font-size:12px; color:#666; margin-top: 20px;">履歴</div>
+        <div style="font-size:12px; color:#666; margin-top: 20px;">出た数字の履歴</div>
         <div id="history"></div>
     </div>
 </div>
@@ -84,20 +77,31 @@
     let numbers = [], history = [], myCard = [];
     let isBingo = false;
 
-    // 自動復帰チェック
-    window.onload = () => {
-        const savedRoom = localStorage.getItem('current_room');
-        const savedRole = localStorage.getItem('current_role');
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomInUrl = urlParams.get('room');
+    // カード配布モード時は最大数字を75に固定
+    function toggleMaxInput() {
+        const m = document.getElementById('mode-input').value;
+        const group = document.getElementById('max-num-group');
+        if (m == "2") {
+            document.getElementById('max-num-input').value = 75;
+            group.style.display = 'none';
+        } else {
+            group.style.display = 'block';
+        }
+    }
 
-        if (roomInUrl) {
-            document.getElementById('room-input').value = roomInUrl;
-            initBingo(false);
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const r = urlParams.get('room');
+        const savedRoom = localStorage.getItem('bingo_room');
+        const savedRole = localStorage.getItem('bingo_role');
+
+        if (r) {
+            document.getElementById('room-input').value = r;
+            startBingo(false);
         } else if (savedRoom && savedRole === 'host') {
-            if (confirm("前回のセッションを再開しますか？")) {
+            if (confirm("前回の運営セッションを再開しますか？")) {
                 document.getElementById('room-input').value = savedRoom;
-                initBingo(true);
+                startBingo(true);
             }
         }
     };
@@ -107,44 +111,47 @@
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         osc.connect(g); g.connect(audioCtx.destination);
-        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(500, audioCtx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         osc.start(); osc.stop(audioCtx.currentTime + 0.1);
     }
 
-    function initBingo(hostMode) {
+    function startBingo(hostMode) {
         roomName = document.getElementById('room-input').value;
         if (!roomName) return alert("合言葉を入力してください");
         isHost = hostMode;
         
-        localStorage.setItem('current_room', roomName);
-        localStorage.setItem('current_role', isHost ? 'host' : 'viewer');
+        localStorage.setItem('bingo_room', roomName);
+        localStorage.setItem('bingo_role', isHost ? 'host' : 'viewer');
 
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('main-game').style.display = 'block';
 
-        // 接続
-        peer = new Peer(isHost ? 'host-' + roomName : null, { debug: 1 });
-
-        peer.on('open', (id) => {
-            isHost ? setupHost() : setupViewer('host-' + roomName);
+        // 接続安定化のためのPeer設定
+        peer = new Peer('host-' + roomName + (isHost ? '' : '-' + Math.floor(Math.random()*1000)), {
+            config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] },
+            debug: 1
         });
 
-        peer.on('error', (err) => {
-            console.error(err);
-            if (err.type === 'unavailable-id') {
-                // ホストの再接続時は少し待機
-                setTimeout(() => initBingo(true), 1000);
-            }
-        });
+        // 自分が参加者の場合、ランダムIDで作り直してホストに接続
+        if (!isHost) {
+            peer.destroy();
+            peer = new Peer();
+            peer.on('open', () => setupViewer('host-' + roomName));
+        } else {
+            peer.on('open', () => setupHost());
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') setupHost(); // すでに存在する場合はそのままセットアップ
+            });
+        }
     }
 
     function setupHost() {
         mode = document.getElementById('mode-input').value;
-        maxNum = parseInt(document.getElementById('max-num-input').value) || 75;
-        document.getElementById('status-badge').innerHTML = '<span class="badge host-badge">運営者：待機中</span>';
+        maxNum = mode == "2" ? 75 : parseInt(document.getElementById('max-num-input').value);
+        document.getElementById('status-badge').innerHTML = '<span class="badge host-badge">運営者</span>';
         document.getElementById('host-controls').style.display = 'block';
-        document.getElementById('room-info').innerText = `ROOM: ${roomName}`;
+        document.getElementById('room-info').innerText = `Room: ${roomName} (${maxNum})`;
 
         numbers = JSON.parse(localStorage.getItem(`nums_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
         history = JSON.parse(localStorage.getItem(`hist_${roomName}`)) || [];
@@ -152,13 +159,15 @@
 
         peer.on('connection', (c) => {
             connections.push(c);
-            c.on('open', () => c.send({ type: 'sync', history, current: history[history.length-1] || '?', mode, maxNum }));
+            c.on('open', () => {
+                c.send({ type: 'sync', history, current: history[history.length-1] || '?', mode, maxNum });
+            });
         });
     }
 
-    function setupViewer(targetId) {
+    function setupViewer(hostId) {
         document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">接続中...</span>';
-        conn = peer.connect(targetId, { reliable: true });
+        conn = peer.connect(hostId);
         
         conn.on('open', () => {
             document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">同期中 ✅</span>';
@@ -167,40 +176,41 @@
         conn.on('data', (data) => {
             if (data.type === 'shuffle') startShuffle();
             if (data.type === 'result' || data.type === 'sync') {
-                mode = data.mode; maxNum = data.maxNum;
-                if (mode == "2" && myCard.length === 0) generateCard();
                 clearInterval(shuffleInterval);
+                mode = data.mode; maxNum = data.maxNum;
+                if (mode == "2" && myCard.length === 0) generateStandardCard();
                 updateUI(data.current || data.number, data.history);
             }
         });
-
-        conn.on('close', () => {
-            document.getElementById('status-badge').innerHTML = '<span class="badge">切断：再接続中...</span>';
-            setTimeout(() => setupViewer(targetId), 2000);
-        });
     }
 
-    function generateCard() {
-        const savedCard = localStorage.getItem(`card_${roomName}`);
-        if (savedCard) {
-            myCard = JSON.parse(savedCard);
-        } else {
-            let pool = Array.from({length: maxNum}, (_, i) => i + 1);
-            for (let i = 0; i < 25; i++) {
-                if (i === 12) myCard.push({ num: 'FREE', hit: true });
-                else {
-                    const idx = Math.floor(Math.random() * pool.length);
-                    myCard.push({ num: pool.splice(idx, 1)[0], hit: false });
-                }
+    // 列ごとに数字を割り当てる公式ルール (B:1-15, I:16-30, N:31-45, G:46-60, O:61-75)
+    function generateStandardCard() {
+        const ranges = [[1,15], [16,30], [31,45], [46,60], [61,75]];
+        let tempCard = [];
+        for (let col = 0; col < 5; col++) {
+            let pool = Array.from({length: 15}, (_, i) => i + ranges[col][0]);
+            for (let row = 0; row < 5; row++) {
+                const idx = Math.floor(Math.random() * pool.length);
+                const num = pool.splice(idx, 1)[0];
+                if (!tempCard[row]) tempCard[row] = [];
+                tempCard[row][col] = num;
             }
-            localStorage.setItem(`card_${roomName}`, JSON.stringify(myCard));
+        }
+        myCard = [];
+        for (let r = 0; r < 5; r++) {
+            for (let c = 0; c < 5; c++) {
+                if (r === 2 && c === 2) myCard.push({ num: 'FREE', hit: true });
+                else myCard.push({ num: tempCard[r][c], hit: false });
+            }
         }
         renderCard();
         document.getElementById('card-area').style.display = 'block';
     }
 
     function renderCard() {
-        document.getElementById('bingo-card').innerHTML = myCard.map(cell => 
+        const grid = document.getElementById('bingo-card');
+        grid.innerHTML = myCard.map(cell => 
             `<div class="cell ${cell.hit ? 'hit' : ''} ${cell.num === 'FREE' ? 'free' : ''}">${cell.num}</div>`
         ).join('');
         checkBingo();
@@ -213,7 +223,7 @@
             [0,5,10,15,20],[1,6,11,16,21],[2,7,12,17,22],[3,8,13,18,23],[4,9,14,19,24], // 縦
             [0,6,12,18,24],[4,8,12,16,20] // 斜め
         ];
-        if (lines.some(line => line.every(i => myCard[i].hit))) {
+        if (lines.some(l => l.every(idx => myCard[idx].hit))) {
             isBingo = true;
             document.getElementById('bingo-overlay').style.display = 'flex';
             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
@@ -231,16 +241,20 @@
     }
 
     function drawNumber() {
-        if (numbers.length === 0) return;
+        if (numbers.length === 0) return alert("終了です");
         const btn = document.getElementById('draw-btn');
         btn.disabled = true;
+        
         connections.forEach(c => c.send({ type: 'shuffle' }));
         startShuffle();
+
         setTimeout(() => {
-            const drawn = numbers.splice(Math.floor(Math.random() * numbers.length), 1)[0];
+            const idx = Math.floor(Math.random() * numbers.length);
+            const drawn = numbers.splice(idx, 1)[0];
             history.push(drawn);
             localStorage.setItem(`nums_${roomName}`, JSON.stringify(numbers));
             localStorage.setItem(`hist_${roomName}`, JSON.stringify(history));
+            
             clearInterval(shuffleInterval);
             updateUI(drawn, history);
             connections.forEach(c => c.send({ type: 'result', number: drawn, history }));
@@ -248,11 +262,10 @@
         }, 3000);
     }
 
-    function updateUI(current, h) {
-        document.getElementById('current-number').innerText = current;
+    function updateUI(num, h) {
+        document.getElementById('current-number').innerText = num;
         if (mode == "2" && myCard.length > 0) {
-            myCard.forEach(c => { if(c.num == current) c.hit = true; });
-            localStorage.setItem(`card_${roomName}`, JSON.stringify(myCard));
+            myCard.forEach(cell => { if(cell.num == num) cell.hit = true; });
             renderCard();
         }
         document.getElementById('history').innerHTML = h.slice().reverse().map((n, i) => 
@@ -266,7 +279,7 @@
     }
 
     function resetBingo() {
-        if (confirm('全てのデータを消去してリセットしますか？')) {
+        if(confirm('リセットしますか？')) {
             localStorage.clear();
             location.href = window.location.origin + window.location.pathname;
         }
