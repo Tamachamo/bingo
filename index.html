@@ -3,83 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE - Custom Range</title>
+    <title>BINGO LIVE Pro - Hybrid Mode</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; margin-bottom: 10px; font-weight: bold; }
+        :root { --primary: #0984e3; --accent: #e74c3c; --success: #00b894; }
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
         .host-badge { background: #ffeaa7; color: #d63031; }
         .viewer-badge { background: #dfe6e9; color: #636e72; }
-        #current-number { font-size: 100px; font-weight: bold; color: #e74c3c; margin: 20px 0; height: 140px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
-        button { font-size: 16px; padding: 12px; width: 100%; border-radius: 50px; border: none; background: #0984e3; color: white; cursor: pointer; margin-bottom: 10px; }
-        .input-group { text-align: left; margin-bottom: 15px; }
-        .input-group label { display: block; font-size: 12px; color: #666; margin-bottom: 5px; margin-left: 10px; }
-        input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ccc; box-sizing: border-box; text-align: center; font-size: 16px; }
-        #history { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
-        .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; font-size: 12px; }
-        .last-digit { background: #ff7675 !important; color: white; }
+        
+        #current-number { font-size: 100px; font-weight: bold; color: var(--accent); margin: 15px 0; height: 130px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
+        
+        button { font-size: 16px; padding: 12px; width: 100%; border-radius: 50px; border: none; background: var(--primary); color: white; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
+        button:disabled { background: #b2bec3; }
+        
+        .setup-group { text-align: left; margin-bottom: 15px; }
+        .setup-group label { display: block; font-size: 12px; color: #666; margin-left: 10px; margin-bottom: 3px; }
+        input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
+
+        /* ビンゴカードのスタイル */
+        .bingo-card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 20px; background: #ddd; padding: 5px; border-radius: 10px; }
+        .cell { aspect-ratio: 1/1; background: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; border-radius: 5px; position: relative; }
+        .cell.hit { background: var(--accent); color: white; }
+        .cell.free { background: #636e72; color: white; font-size: 10px; }
+
+        #history { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 15px; }
+        .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; font-size: 12px; font-weight: bold; }
+        .last-digit { background: var(--accent) !important; color: white; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="status-badge"><span class="badge">ロビー</span></div>
-    <h1>🎉 BINGO LIVE</h1>
+    <h1 style="margin: 0 0 15px 0;">🎉 BINGO LIVE Pro</h1>
 
     <div id="room-setup">
-        <div class="input-group">
+        <div class="setup-group">
             <label>ルーム名（合言葉）</label>
-            <input type="text" id="room-input" placeholder="例: event01">
+            <input type="text" id="room-input" placeholder="例: matsusaka2026">
         </div>
-        <div class="input-group">
+        <div class="setup-group">
+            <label>モード選択</label>
+            <select id="mode-input">
+                <option value="1">通常モード（抽選機のみ）</option>
+                <option value="2">カード配布モード（デジタルカード付）</option>
+            </select>
+        </div>
+        <div class="setup-group">
             <label>最大数字（デフォルト: 75）</label>
-            <input type="number" id="max-num-input" value="75" min="1" max="999">
+            <input type="number" id="max-num-input" value="75">
         </div>
-        <button onclick="startBingo(true)">運営者として開始</button>
-        <p style="font-size: 12px; color: #666;">または招待URLから参加してください</p>
+        <button onclick="initBingo(true)">運営者として開始</button>
     </div>
 
     <div id="main-game" style="display:none;">
-        <div id="room-info" style="font-size: 14px; margin-bottom: 10px; font-weight: bold; color: #0984e3;"></div>
+        <div id="room-info" style="font-size: 14px; font-weight: bold; color: var(--primary);"></div>
         <div id="current-number">?</div>
         
         <div id="host-controls" style="display: none;">
             <button id="draw-btn" onclick="drawNumber()">数字を引く！</button>
-            <button onclick="copyInviteURL()" style="background: #00b894;">招待URLをコピー</button>
-            <button onclick="resetBingo()" style="background: #636e72;">リセット</button>
+            <button onclick="copyInviteURL()" style="background: var(--success);">招待URLをコピー</button>
+            <button onclick="resetBingo()" style="background: #636e72;">終了・リセット</button>
+        </div>
+
+        <div id="card-area" style="display:none;">
+            <div style="font-weight: bold; margin-bottom: 5px;">My Bingo Card</div>
+            <div id="bingo-card" class="bingo-card"></div>
         </div>
         
-        <div style="font-size:14px; color:#666; margin-top: 10px;">出た数字の履歴</div>
+        <div style="font-size:12px; color:#666; margin-top: 20px;">履歴</div>
         <div id="history"></div>
     </div>
 </div>
 
 <script>
     let peer, conn, connections = [];
-    let roomName = "";
-    let isHost = false;
-    let maxNum = 75;
-    let numbers = [];
-    let history = [];
+    let roomName, isHost, mode, maxNum;
+    let numbers = [], history = [], myCard = [];
 
+    // URLパラメータ確認
     const urlParams = new URLSearchParams(window.location.search);
-    const roomParam = urlParams.get('room');
-    if (roomParam) {
-        document.getElementById('room-input').value = roomParam;
-        startBingo(false);
+    if (urlParams.get('room')) {
+        document.getElementById('room-input').value = urlParams.get('room');
+        initBingo(false);
     }
 
-    function startBingo(hostMode) {
+    // サウンド生成（ブラウザのWeb Audio APIを使用）
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTickSound() {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function initBingo(hostMode) {
         roomName = document.getElementById('room-input').value;
         if (!roomName) return alert("ルーム名を入力してください");
-
         isHost = hostMode;
+        
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('main-game').style.display = 'block';
 
-        const peerId = isHost ? roomName : null;
-        peer = new Peer(peerId);
+        peer = new Peer(isHost ? roomName : null);
 
         peer.on('open', (id) => {
             if (isHost) {
@@ -88,55 +122,63 @@
                 setupViewer(roomName);
             }
         });
-
-        peer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                alert("このルーム名は使用中です。別の名前を試してください。");
-                location.reload();
-            }
-        });
     }
 
     function setupHost() {
+        mode = document.getElementById('mode-input').value;
+        maxNum = parseInt(document.getElementById('max-num-input').value) || 75;
         document.getElementById('status-badge').innerHTML = '<span class="badge host-badge">運営者</span>';
         document.getElementById('host-controls').style.display = 'block';
-        
-        // 運営者側で設定された最大値を取得
-        maxNum = parseInt(document.getElementById('max-num-input').value) || 75;
-        localStorage.setItem(`bingo_max_${roomName}`, maxNum);
+        document.getElementById('room-info').innerText = `Room: ${roomName} (Mode ${mode})`;
 
-        document.getElementById('room-info').innerText = `Room: ${roomName} (1-${maxNum})`;
-
-        // データの読み込み
-        numbers = JSON.parse(localStorage.getItem(`bingo_nums_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
-        history = JSON.parse(localStorage.getItem(`bingo_hist_${roomName}`)) || [];
+        numbers = JSON.parse(localStorage.getItem(`nums_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
+        history = JSON.parse(localStorage.getItem(`hist_${roomName}`)) || [];
         updateUI(history[history.length-1] || '?', history);
 
         peer.on('connection', (c) => {
             connections.push(c);
-            c.on('open', () => {
-                c.send({ type: 'sync', history: history, current: history[history.length-1] || '?', maxNum: maxNum });
-            });
+            c.on('open', () => c.send({ type: 'sync', history, current: history[history.length-1] || '?', mode, maxNum }));
         });
     }
 
     function setupViewer(targetRoom) {
         document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">参加者：接続中...</span>';
         conn = peer.connect(targetRoom);
-        conn.on('open', () => {
-            document.getElementById('status-badge').innerHTML = '<span class="badge viewer-badge">参加者：同期中 ✅</span>';
-        });
         conn.on('data', (data) => {
             if (data.type === 'shuffle') startShuffle();
             if (data.type === 'result' || data.type === 'sync') {
-                if (data.maxNum) {
+                if (data.mode) {
+                    mode = data.mode;
                     maxNum = data.maxNum;
-                    document.getElementById('room-info').innerText = `Room: ${roomName} (1-${maxNum})`;
+                    if (mode == "2" && myCard.length === 0) generateCard();
                 }
                 clearInterval(shuffleInterval);
                 updateUI(data.current || data.number, data.history);
             }
         });
+    }
+
+    function generateCard() {
+        // カードを生成 (中央FREE)
+        let pool = Array.from({length: maxNum}, (_, i) => i + 1);
+        myCard = [];
+        for (let i = 0; i < 25; i++) {
+            if (i === 12) {
+                myCard.push({ num: 'FREE', hit: true });
+            } else {
+                const idx = Math.floor(Math.random() * pool.length);
+                myCard.push({ num: pool.splice(idx, 1)[0], hit: false });
+            }
+        }
+        renderCard();
+        document.getElementById('card-area').style.display = 'block';
+    }
+
+    function renderCard() {
+        const grid = document.getElementById('bingo-card');
+        grid.innerHTML = myCard.map(cell => 
+            `<div class="cell ${cell.hit ? 'hit' : ''} ${cell.num === 'FREE' ? 'free' : ''}">${cell.num}</div>`
+        ).join('');
     }
 
     let shuffleInterval;
@@ -145,11 +187,12 @@
         clearInterval(shuffleInterval);
         shuffleInterval = setInterval(() => {
             display.innerText = Math.floor(Math.random() * maxNum) + 1;
+            playTickSound(); // シャッフル音
         }, 80);
     }
 
     function drawNumber() {
-        if (numbers.length === 0) return alert("すべて出揃いました！");
+        if (numbers.length === 0) return alert("終了");
         const btn = document.getElementById('draw-btn');
         btn.disabled = true;
         connections.forEach(c => c.send({ type: 'shuffle' }));
@@ -158,35 +201,35 @@
         setTimeout(() => {
             const drawn = numbers.splice(Math.floor(Math.random() * numbers.length), 1)[0];
             history.push(drawn);
-            
-            localStorage.setItem(`bingo_nums_${roomName}`, JSON.stringify(numbers));
-            localStorage.setItem(`bingo_hist_${roomName}`, JSON.stringify(history));
-
+            localStorage.setItem(`nums_${roomName}`, JSON.stringify(numbers));
+            localStorage.setItem(`hist_${roomName}`, JSON.stringify(history));
             clearInterval(shuffleInterval);
             updateUI(drawn, history);
-            connections.forEach(c => c.send({ type: 'result', number: drawn, history: history }));
+            connections.forEach(c => c.send({ type: 'result', number: drawn, history }));
             btn.disabled = false;
         }, 3000);
     }
 
     function updateUI(current, newHistory) {
         document.getElementById('current-number').innerText = current;
-        const historyDiv = document.getElementById('history');
-        historyDiv.innerHTML = newHistory.slice().reverse().map((n, i) => 
+        // 自動穴あけ (モード2)
+        if (mode == "2" && myCard.length > 0) {
+            myCard.forEach(cell => { if (cell.num == current) cell.hit = true; });
+            renderCard();
+        }
+        document.getElementById('history').innerHTML = newHistory.slice().reverse().map((n, i) => 
             `<div class="history-item ${i===0?'last-digit':''}">${n}</div>`
         ).join('');
     }
 
     function copyInviteURL() {
-        const inviteURL = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
-        navigator.clipboard.writeText(inviteURL).then(() => alert("招待URLをコピーしました！"));
+        const url = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
+        navigator.clipboard.writeText(url).then(() => alert("URLをコピーしました！"));
     }
 
     function resetBingo() {
-        if(confirm('リセットしますか？')){
-            localStorage.removeItem(`bingo_nums_${roomName}`);
-            localStorage.removeItem(`bingo_hist_${roomName}`);
-            localStorage.removeItem(`bingo_max_${roomName}`);
+        if (confirm('終了しますか？')) {
+            localStorage.clear();
             location.href = window.location.origin + window.location.pathname;
         }
     }
