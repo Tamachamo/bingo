@@ -1,7 +1,7 @@
 # 🎉 BINGO LIVE Pro - Ultimate Stable Edition
 
 ブラウザだけで完結する、リアルタイム同期型の「次世代ビンゴ抽選システム」です。
-従来のP2P方式を卒業し、**Supabase Realtime** をバックエンドに採用することで、モバイル回線（4G/5G）や公共Wi-Fi環境下でも、極めて高い接続安定性を実現しました。
+**Supabase Realtime** をバックエンドに採用することで、モバイル回線（4G/5G）や公共Wi-Fi環境下でも、極めて高い接続安定性を実現しました。
 
 ## 🚀 ライブデモ
 https://tamachamo.github.io/bingo/
