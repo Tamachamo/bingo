@@ -12,10 +12,11 @@
         .container { max-width: 480px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         #current-number { font-size: 100px; font-weight: bold; color: var(--accent); margin: 15px 0; height: 130px; display: flex; align-items: center; justify-content: center; background: #fff5f5; border-radius: 15px; border: 4px solid #ff7675; }
         button { font-size: 16px; padding: 12px; width: 100%; border-radius: 50px; border: none; background: var(--primary); color: white; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
+        .btn-copy { background: var(--success); }
+        .btn-reset { background: #636e72; font-size: 14px; }
         .bingo-card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 15px; background: #ccc; padding: 5px; border-radius: 10px; }
         .cell { aspect-ratio: 1/1; background: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; border-radius: 5px; }
         .cell.hit { background: var(--accent); color: white; transition: 0.3s; }
-        .cell.free { background: #636e72; color: white; font-size: 10px; }
         .history-item { width: 30px; height: 30px; line-height: 30px; background: #dfe6e9; border-radius: 50%; display: inline-block; margin: 2px; font-size: 12px; font-weight: bold; }
         .last-digit { background: var(--accent) !important; color: white; }
         #bingo-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: gold; font-size: 60px; pointer-events: none; }
@@ -27,7 +28,7 @@
     <div id="badge" style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #666;">ロビー</div>
     <h1 style="margin:0 0 10px 0;">🎉 BINGO LIVE Pro</h1>
     <div id="room-setup">
-        <input type="text" id="room-input" placeholder="ルーム名（合言葉）" style="width:100%; padding:12px; margin-bottom:10px; border-radius:10px; border:1px solid #ccc; box-sizing:border-box;">
+        <input type="text" id="room-input" placeholder="合言葉" style="width:100%; padding:12px; margin-bottom:10px; border-radius:10px; border:1px solid #ccc; box-sizing:border-box;">
         <select id="mode-input" style="width:100%; padding:12px; margin-bottom:10px; border-radius:10px; border:1px solid #ccc;">
             <option value="1">通常モード</option>
             <option value="2">カード配布モード</option>
@@ -37,10 +38,13 @@
     <div id="main-game" style="display:none;">
         <div id="room-info" style="font-size: 14px; font-weight: bold; color: var(--primary);"></div>
         <div id="current-number">?</div>
+        
         <div id="host-controls" style="display:none;">
             <button id="draw-btn" onclick="drawNumber()">数字を引く！</button>
-            <button onclick="resetBingo()" style="background:#636e72; font-size:12px;">リセット</button>
+            <button class="btn-copy" onclick="copyInviteURL()">招待URLをコピー</button>
+            <button class="btn-reset" onclick="resetBingo()">リセット</button>
         </div>
+
         <div id="card-area" style="display:none;"><div id="bingo-card" class="bingo-card"></div></div>
         <div style="font-size:12px; margin-top:15px;">履歴</div>
         <div id="history"></div>
@@ -48,16 +52,20 @@
 </div>
 
 <script>
-    // Vercelデプロイ時、ここは環境変数または直接入力に書き換えてください
-    const SUPABASE_URL = 'https://nabtioekqpiktpjauqew.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hYnRpb2VrcXBpa3RwamF1cWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTQ5MzAsImV4cCI6MjA4NzY5MDkzMH0.0eGaw82h3jiVs9N6b4JG0fd-hbPEFUT2AQTBT6s1vww';
+    // ここに自分のキーを入れてください
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let channel, roomName, isHost, mode, numbers = [], history = [], myCard = [];
     let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let shuffleTimer;
 
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('room')) { document.getElementById('room-input').value = urlParams.get('room'); startBingo(false); }
+    if (urlParams.get('room')) {
+        document.getElementById('room-input').value = urlParams.get('room');
+        startBingo(false);
+    }
 
     function playTick() {
         const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
@@ -69,7 +77,7 @@
 
     async function startBingo(hostMode) {
         roomName = document.getElementById('room-input').value;
-        if (!roomName) return alert("ルーム名が必要です");
+        if (!roomName) return alert("合言葉が必要です");
         isHost = hostMode;
         mode = document.getElementById('mode-input').value;
 
@@ -119,17 +127,6 @@
         renderCard();
     }
 
-    function updateUI(cur) {
-        document.getElementById('current-number').innerText = cur;
-        if (mode == "2") {
-            myCard.forEach(c => { if(c.n == cur) c.h = true; });
-            renderCard();
-        }
-        document.getElementById('history').innerHTML = history.slice().reverse().map((n, i) => 
-            `<div class="history-item ${i===0?'last-digit':''}">${n}</div>`
-        ).join('');
-    }
-
     function renderCard() {
         document.getElementById('bingo-card').innerHTML = myCard.map(c => `<div class="cell ${c.h?'hit':''}">${c.n}</div>`).join('');
         checkBingo();
@@ -143,7 +140,6 @@
         }
     }
 
-    let shuffleTimer;
     function startShuffle() {
         clearInterval(shuffleTimer);
         shuffleTimer = setInterval(() => {
@@ -167,7 +163,12 @@
     }
 
     function sendSync(type = 'sync', cur = null) {
-        channel.send({ type: 'broadcast', event: 'update', payload: { type, history, mode, current: cur || history[history.length-1] || '?' } });
+        channel.send({ type: 'broadcast', event: 'update', payload: { type, history, mode, current: cur || history[history.length - 1] || '?' } });
+    }
+
+    function copyInviteURL() {
+        const url = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
+        navigator.clipboard.writeText(url).then(() => alert("招待URLをコピーしました！"));
     }
 
     function resetBingo() { if(confirm('リセット？')) { localStorage.clear(); location.reload(); } }
