@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE Pro - Ultimate Stable</title>
+    <title>BINGO LIVE Pro - Persistent Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -38,8 +38,8 @@
         <div class="setup-group">
             <label>モード</label>
             <select id="mode-input" onchange="toggleMaxInput()">
-                <option value="1">通常モード（抽選機のみ）</option>
-                <option value="2">カード配布モード（75専用）</option>
+                <option value="1">通常モード</option>
+                <option value="2">カード配布モード</option>
             </select>
         </div>
         <div class="setup-group" id="max-num-group">
@@ -67,7 +67,6 @@
 </div>
 
 <script>
-    // --- 【重要】ここに自分のSupabaseのキーを入れてください ---
     const SUPABASE_URL = 'https://nabtioekqpiktpjauqew.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hYnRpb2VrcXBpa3RwamF1cWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTQ5MzAsImV4cCI6MjA4NzY5MDkzMH0.0eGaw82h3jiVs9N6b4JG0fd-hbPEFUT2AQTBT6s1vww';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -76,21 +75,25 @@
     let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let shuffleTimer;
 
+    // --- 復帰ロジック ---
+    window.onload = async () => {
+        const savedRoom = localStorage.getItem('active_room');
+        const savedRole = localStorage.getItem('active_role');
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomInUrl = urlParams.get('room');
+
+        if (roomInUrl) {
+            document.getElementById('room-input').value = roomInUrl;
+            startBingo(false);
+        } else if (savedRoom && savedRole) {
+            document.getElementById('room-input').value = savedRoom;
+            startBingo(savedRole === 'host');
+        }
+    };
+
     function toggleMaxInput() {
         const m = document.getElementById('mode-input').value;
-        const group = document.getElementById('max-num-group');
-        if (m == "2") {
-            document.getElementById('max-num-input').value = 75;
-            group.style.display = 'none';
-        } else {
-            group.style.display = 'block';
-        }
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('room')) {
-        document.getElementById('room-input').value = urlParams.get('room');
-        startBingo(false);
+        document.getElementById('max-num-group').style.display = (m == "2") ? 'none' : 'block';
     }
 
     function playTick() {
@@ -103,10 +106,12 @@
 
     async function startBingo(hostMode) {
         roomName = document.getElementById('room-input').value;
-        if (!roomName) return alert("合言葉が必要です");
+        if (!roomName) return;
         isHost = hostMode;
-        mode = document.getElementById('mode-input').value;
-        maxNum = parseInt(document.getElementById('max-num-input').value) || 75;
+        
+        // セッション保存
+        localStorage.setItem('active_room', roomName);
+        localStorage.setItem('active_role', isHost ? 'host' : 'viewer');
 
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('main-game').style.display = 'block';
@@ -117,6 +122,8 @@
                 document.getElementById('badge').innerText = isHost ? "運営者" : "参加者：同期中 ✅";
                 if (isHost) {
                     document.getElementById('host-controls').style.display = 'block';
+                    mode = localStorage.getItem(`mode_${roomName}`) || document.getElementById('mode-input').value;
+                    maxNum = localStorage.getItem(`max_${roomName}`) || document.getElementById('max-num-input').value;
                     numbers = JSON.parse(localStorage.getItem(`n_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
                     history = JSON.parse(localStorage.getItem(`h_${roomName}`)) || [];
                     sendSync();
@@ -129,9 +136,17 @@
         if (p.type === 'shuffle') startShuffle();
         if (p.type === 'sync' || p.type === 'result') {
             clearInterval(shuffleTimer);
-            mode = p.mode; history = p.history; maxNum = p.maxNum || 75;
+            mode = p.mode; history = p.history; maxNum = p.maxNum;
             document.getElementById('room-info').innerText = `Room: ${roomName} (${maxNum})`;
-            if (mode == "2" && myCard.length === 0) generateCard();
+            if (mode == "2") {
+                const savedCard = localStorage.getItem(`card_${roomName}`);
+                if (savedCard) {
+                    myCard = JSON.parse(savedCard);
+                } else {
+                    generateCard();
+                }
+                document.getElementById('card-area').style.display = 'block';
+            }
             updateUI(p.current);
         }
     }
@@ -151,7 +166,7 @@
             if (r === 2 && c === 2) myCard.push({ n: 'FREE', h: true });
             else myCard.push({ n: temp[r][c], h: false });
         }
-        document.getElementById('card-area').style.display = 'block';
+        localStorage.setItem(`card_${roomName}`, JSON.stringify(myCard));
         renderCard();
     }
 
@@ -159,6 +174,7 @@
         document.getElementById('current-number').innerText = cur;
         if (mode == "2") {
             myCard.forEach(c => { if(c.n == cur) c.h = true; });
+            localStorage.setItem(`card_${roomName}`, JSON.stringify(myCard));
             renderCard();
         }
         document.getElementById('history').innerHTML = history.slice().reverse().map((n, i) => 
@@ -196,6 +212,8 @@
             history.push(d);
             localStorage.setItem(`n_${roomName}`, JSON.stringify(numbers));
             localStorage.setItem(`h_${roomName}`, JSON.stringify(history));
+            localStorage.setItem(`max_${roomName}`, maxNum);
+            localStorage.setItem(`mode_${roomName}`, mode);
             sendSync('result', d);
             document.getElementById('draw-btn').disabled = false;
         }, 3000);
@@ -207,10 +225,15 @@
 
     function copyInviteURL() {
         const url = `${window.location.origin}${window.location.pathname}?room=${roomName}`;
-        navigator.clipboard.writeText(url).then(() => alert("招待URLをコピーしました！"));
+        navigator.clipboard.writeText(url).then(() => alert("URLをコピーしました！"));
     }
 
-    function resetBingo() { if(confirm('リセット？')) { localStorage.clear(); location.reload(); } }
+    function resetBingo() {
+        if(confirm('全てのデータを消去してリセットしますか？')) {
+            localStorage.clear();
+            location.href = window.location.origin + window.location.pathname;
+        }
+    }
 </script>
 </body>
 </html>
