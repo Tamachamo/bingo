@@ -75,19 +75,27 @@
     let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let shuffleTimer;
 
-    // --- 復帰ロジック ---
+    // --- 改良された復帰ロジック ---
     window.onload = async () => {
         const savedRoom = localStorage.getItem('active_room');
         const savedRole = localStorage.getItem('active_role');
         const urlParams = new URLSearchParams(window.location.search);
         const roomInUrl = urlParams.get('room');
 
+        // 1. まず保存されたセッションがあるか確認
+        if (savedRoom && savedRole) {
+            // URLのルーム名と保存されたルーム名が一致、またはURLに指定がない場合
+            if (!roomInUrl || roomInUrl === savedRoom) {
+                document.getElementById('room-input').value = savedRoom;
+                startBingo(savedRole === 'host');
+                return; // 判定終了
+            }
+        }
+
+        // 2. 保存されたセッションがない、または別のルームのURLを踏んだ場合
         if (roomInUrl) {
             document.getElementById('room-input').value = roomInUrl;
             startBingo(false);
-        } else if (savedRoom && savedRole) {
-            document.getElementById('room-input').value = savedRoom;
-            startBingo(savedRole === 'host');
         }
     };
 
@@ -109,7 +117,7 @@
         if (!roomName) return;
         isHost = hostMode;
         
-        // セッション保存
+        // セッション情報を保存
         localStorage.setItem('active_room', roomName);
         localStorage.setItem('active_role', isHost ? 'host' : 'viewer');
 
@@ -122,6 +130,7 @@
                 document.getElementById('badge').innerText = isHost ? "運営者" : "参加者：同期中 ✅";
                 if (isHost) {
                     document.getElementById('host-controls').style.display = 'block';
+                    // 保存された設定があれば復元、なければ現在の入力を採用
                     mode = localStorage.getItem(`mode_${roomName}`) || document.getElementById('mode-input').value;
                     maxNum = localStorage.getItem(`max_${roomName}`) || document.getElementById('max-num-input').value;
                     numbers = JSON.parse(localStorage.getItem(`n_${roomName}`)) || Array.from({length: maxNum}, (_, i) => i + 1);
