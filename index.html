@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BINGO LIVE Pro - Instant Sync</title>
+    <title>BINGO LIVE Pro - Multi-language Support</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
@@ -33,8 +33,8 @@
     
     <div id="room-setup">
         <div class="setup-group">
-            <label>合言葉</label>
-            <input type="text" id="room-input" placeholder="例: event2026">
+            <label>合言葉（日本語OK！）</label>
+            <input type="text" id="room-input" placeholder="例: イベント">
         </div>
         <div class="setup-group">
             <label>モード</label>
@@ -72,8 +72,8 @@
 </div>
 
 <script>
-    const SUPABASE_URL = 'https://nabtioekqpiktpjauqew.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hYnRpb2VrcXBpa3RwamF1cWV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTQ5MzAsImV4cCI6MjA4NzY5MDkzMH0.0eGaw82h3jiVs9N6b4JG0fd-hbPEFUT2AQTBT6s1vww';
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let channel, roomName, isHost, mode, maxNum, numbers = [], history = [], myCard = [];
@@ -114,8 +114,11 @@
     }
 
     async function startBingo(hostMode) {
-        roomName = document.getElementById('room-input').value;
-        if (!roomName) return;
+        let inputRoom = document.getElementById('room-input').value.trim();
+        if (!inputRoom) return alert("合言葉が必要です");
+        
+        // 全角数字を半角に変換、空白を削除
+        roomName = inputRoom.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/\s+/g, '');
         isHost = hostMode;
         
         localStorage.setItem('active_room', roomName);
@@ -124,7 +127,9 @@
         document.getElementById('room-setup').style.display = 'none';
         document.getElementById('main-game').style.display = 'block';
 
-        channel = supabaseClient.channel(`room_${roomName}`, { config: { broadcast: { self: true } } });
+        // 【重要】日本語の合言葉を安全な形式（URLエンコード）に変換してチャンネル名にする
+        const safeChannelName = encodeURIComponent(roomName).replace(/%/g, '_');
+        channel = supabaseClient.channel(`room_${safeChannelName}`, { config: { broadcast: { self: true } } });
         
         channel.on('broadcast', { event: 'update' }, p => handleMsg(p.payload)).subscribe(s => {
             if (s === 'SUBSCRIBED') {
@@ -140,7 +145,6 @@
                 } else {
                     document.getElementById('host-controls').style.display = 'none';
                     document.getElementById('viewer-controls').style.display = 'block';
-                    // 入室した瞬間に、運営者へ現在の状態をリクエストする
                     channel.send({ type: 'broadcast', event: 'update', payload: { type: 'request_sync' } });
                 }
             }
@@ -148,7 +152,6 @@
     }
 
     function handleMsg(p) {
-        // 運営者が参加者からのリクエストを受け取った時
         if (isHost && p.type === 'request_sync') {
             sendSync();
             return;
@@ -168,7 +171,6 @@
                 } else {
                     generateCard();
                 }
-                // カードエリアを即座に表示
                 document.getElementById('card-area').style.display = 'block';
             }
             updateUI(p.current);
@@ -197,7 +199,6 @@
     function updateUI(cur) {
         document.getElementById('current-number').innerText = cur;
         if (mode == "2" && myCard.length > 0) {
-            // 現在の数字が履歴に含まれている場合、カードを更新
             history.forEach(num => {
                 myCard.forEach(c => { if(c.n == num) c.h = true; });
             });
